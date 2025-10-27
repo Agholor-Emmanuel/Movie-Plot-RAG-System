@@ -19,20 +19,22 @@ A lightweight Retrieval-Augmented Generation (RAG) system that answers questions
 ## ✨ Features
 
 - **Multi-LLM Support**: Switch between Claude, OpenAI GPT-4, or Google Gemini
-- **Efficient Retrieval**: Uses FAISS for fast similarity search
+- **Efficient Retrieval**: Uses FAISS for fast similarity search with OpenAI embeddings
 - **Smart Chunking**: Automatically splits long movie plots while preserving context
+- **Vector Store Caching**: Save and load embeddings for instant subsequent queries
 - **Modular Design**: Clean, maintainable code structure
 - **Rich Responses**: Returns structured JSON with answer, contexts, and reasoning
+- **Logging**: Comprehensive logging to track system performance
 
 ## 🏗️ Architecture
 ```
-Query → Embedding → FAISS Retrieval → Context + Prompt → LLM → Structured Answer
+Query → OpenAI Embedding → FAISS Retrieval → Context + Prompt → LLM → Structured Answer
 ```
 
 1. **Data Ingestion**: Downloads and loads movie data from Kaggle
 2. **Preprocessing**: Formats and chunks movie plots (1000 chars/chunk, 200 overlap)
-3. **Embedding**: Converts text to vectors using Sentence Transformers
-4. **Storage**: Stores vectors in FAISS for efficient retrieval
+3. **Embedding**: Converts text to vectors using OpenAI's embedding model
+4. **Storage**: Stores vectors in FAISS for efficient retrieval (cached to disk)
 5. **Retrieval**: Finds top-k relevant movie plots for queries
 6. **Generation**: Uses LLM to generate answers with reasoning
 
@@ -40,6 +42,7 @@ Query → Embedding → FAISS Retrieval → Context + Prompt → LLM → Structu
 
 - Python 3.8+
 - Kaggle account (for dataset access)
+- **OpenAI API key** (required for embeddings)
 - API key for at least one LLM provider:
   - **Anthropic** (Claude) - Recommended
   - **OpenAI** (GPT-4)
@@ -74,9 +77,8 @@ pip install -r requirements.txt
 
 This will install:
 - LangChain ecosystem (core, community, integrations)
-- Sentence Transformers for embeddings
+- OpenAI Python SDK
 - FAISS for vector storage
-- PyTorch (CPU version)
 - Kaggle API client
 
 ## ⚙️ Configuration
@@ -98,15 +100,17 @@ Create a `.env` file in the project root:
 KAGGLE_USERNAME=your_kaggle_username
 KAGGLE_KEY=your_kaggle_api_key
 
+# OpenAI API Key (REQUIRED for embeddings)
+OPENAI_API_KEY=your_openai_api_key
+
 # LLM API Keys (add at least one)
 ANTHROPIC_API_KEY=your_claude_api_key
-OPENAI_API_KEY=your_openai_api_key
 GEMINI_API_KEY=your_gemini_api_key
 ```
 
 **Getting API Keys:**
+- **OpenAI**: https://platform.openai.com/api-keys (Required!)
 - **Claude**: https://console.anthropic.com/
-- **OpenAI**: https://platform.openai.com/api-keys
 - **Gemini**: https://aistudio.google.com/app/apikey
 
 ### 3. Configure Parameters (Optional)
@@ -120,20 +124,43 @@ CHUNK_OVERLAP = 200        # Overlap between chunks
 
 # Retrieval parameters
 TOP_K = 8                  # Number of contexts to retrieve
-DEFAULT_LLM_COMP = 'openai'  # Default LLM: 'claude', 'openai', or 'gemini'
+DEFAULT_LLM_COMP = 'claude'  # Default LLM: 'claude', 'openai', or 'gemini'
 
-# Embedding model
-EMBEDDING_MODEL = 'sentence-transformers/all-mpnet-base-v2'
+# Paths
+DATA_PATH = 'data/'
+VECTOR_STORE_PATH = 'vector_store/'
 ```
 
 ## 🎯 Usage
 
-### Basic Usage
+### First Run (Build Vector Store)
 
-Run the system with default queries:
+On your first run, the system will build and cache the vector store:
+```python
+# In main.py
+main(queries, load_from_cache=0)  # 0 = build from scratch
+```
 ```bash
 python main.py
 ```
+
+This will:
+1. Load 500 movies from Kaggle dataset
+2. Chunk the movie plots
+3. Create embeddings using OpenAI
+4. Save to `vector_store/` directory (takes ~30-60 seconds)
+
+### Subsequent Runs (Use Cache)
+
+After the first run, use the cached vector store for instant queries:
+```python
+# In main.py
+main(queries, load_from_cache=1)  # 1 = load from cache
+```
+```bash
+python main.py
+```
+
 
 ### Custom Queries
 
@@ -142,40 +169,35 @@ Edit `main.py` to add your own queries:
 if __name__ == "__main__":
     queries = [
         "What movies are about space exploration?",
-        "Tell me about romantic comedies",
+        "Tell me about romantic comedies from the 1990s",
         "Which movies feature robots?"
     ]
-    main(queries)
+    
+    # Use cache
+    main(queries, load_from_cache=1)
 ```
 
 ### Using Different LLM Providers
 
-**In code:**
+**Change default in `config.py`:**
 ```python
-# Use Claude 
+DEFAULT_LLM_COMP = 'claude'  # or 'openai' or 'gemini'
+```
+
+**Or in code:**
+```python
 result = rag_query(query, vector_store, provider="claude")
-
-# Use OpenAI
 result = rag_query(query, vector_store, provider="openai")
-
-# Use Gemini
 result = rag_query(query, vector_store, provider="gemini")
 ```
 
-**Or change default in `config.py`:**
+### Rebuild Vector Store
+
+If you change the data or want to rebuild:
 ```python
-DEFAULT_LLM_COMP = 'openai'  # Change to 'openai' or 'claude'
+# In main.py
+main(queries, load_from_cache=0)  # Force rebuild
 ```
-
-### First-Time Setup (Download Dataset)
-
-To download the dataset from Kaggle on first run:
-```python
-# In main.py, change:
-df = ingest_data(download=True, sample_size=500)  # Set download=True
-```
-
-After first download, change back to `download=False` to use cached data.
 
 ## 📁 Project Structure
 ```
@@ -183,6 +205,7 @@ movies_plot_rag_agent/
 ├── config.py                 # Configuration and environment variables
 ├── main.py                   # Main execution script
 ├── requirements.txt          # Python dependencies
+├── rag_system.log           # System logs (auto-generated)
 ├── .env                      # Environment variables (create this)
 ├── .gitignore               # Git ignore file
 ├── README.md                # This file
@@ -191,7 +214,7 @@ movies_plot_rag_agent/
 │   ├── __init__.py
 │   ├── data_ingestion.py    # Download and load data from Kaggle
 │   ├── data_preprocessing.py # Format and chunk movie plots
-│   ├── embeddings.py        # Create embeddings
+│   ├── embeddings.py        # Create embeddings with caching
 │   └── retrieval.py         # Retrieve contexts and generate answers
 │
 ├── utils/                   # Utility functions
@@ -200,8 +223,12 @@ movies_plot_rag_agent/
 │   ├── llm_utils.py         # LLM initialization and response generation
 │   └── prompt_utils.py      # Prompt templates
 │
-└── data/                    # Downloaded datasets (auto-created)
-    └── wiki_movie_plots_deduped.csv
+├── data/                    # Downloaded datasets (auto-created)
+│   └── wiki_movie_plots_deduped.csv
+│
+└── vector_store/            # Cached embeddings (auto-created)
+    ├── index.faiss
+    └── index.pkl
 ```
 
 ## 🔄 How It Works
@@ -224,15 +251,23 @@ chunks = preprocess_pipeline(df)
 ### 3. Embedding & Storage
 ```python
 from modules.embeddings import create_embeddings
-vector_store = create_embeddings(chunks, model="Openai")
-# Uses sentence-transformers to create embeddings
+vector_store = create_embeddings(chunks, model="OpenAI")
+# Uses OpenAI's text-embedding-ada-002 model
+# Automatically saves to vector_store/ directory
 # Stores in FAISS for efficient similarity search
 ```
 
-### 4. Query Processing
+### 4. Loading from Cache
+```python
+from utils.db_utils import load_vector_store
+vector_store = load_vector_store(embedding_model="OpenAI")
+# Loads pre-computed embeddings from disk (instant!)
+```
+
+### 5. Query Processing
 ```python
 from modules.retrieval import retrieve_and_generate
-result = retrieve_and_generate(query, vector_store, top_k=3, provider="claude")
+result = retrieve_and_generate(query, vector_store, top_k=8, provider="claude")
 ```
 
 **Returns:**
@@ -242,20 +277,6 @@ result = retrieve_and_generate(query, vector_store, top_k=3, provider="claude")
   "contexts": ["Context 1...", "Context 2...", "Context 3..."],
   "reasoning": "Explanation of how the answer was formed"
 }
-```
-
-
-### Adjust Chunk Size
-
-For longer contexts:
-```python
-CHUNK_SIZE = 1500        # Increase for more context
-CHUNK_OVERLAP = 300      # Increase overlap proportionally
-```
-
-### Retrieve More Contexts
-```python
-TOP_K = 10  # Retrieve top 10 instead of top 8
 ```
 
 ### Modify Prompts
@@ -269,40 +290,31 @@ def get_rag_prompt() -> ChatPromptTemplate:
     ])
     return prompt
 ```
+### Clear Cache
 
+To rebuild vector store from scratch:
+```bash
+# Delete cache
+rm -rf vector_store/
 
-## 📊 Example Output
-```
-============================================================
-Query: What movies feature artificial intelligence?
-============================================================
-✓ Retrieved 3 chunks
-{
-  "answer": "Based on the provided contexts, 'Ex Machina' features artificial intelligence as a central theme. The movie involves a programmer who is invited to administer the Turing test to an intelligent humanoid robot.",
-  "contexts": [
-    "Title: Ex Machina\nPlot: A young programmer is selected to participate in a breakthrough experiment in synthetic intelligence by evaluating the human qualities of a highly advanced humanoid A.I....",
-    "Title: 2001: A Space Odyssey\nPlot: Humanity finds a mysterious, obviously artificial, artifact buried beneath the Lunar surface and, with the intelligent computer HAL 9000...",
-    "Title: Blade Runner\nPlot: In the futuristic year of 2019, Los Angeles has become a dark and depressing metropolis, filled with urban decay. Rick Deckard, an ex-cop, is a 'Blade Runner'..."
-  ],
-  "reasoning": "I searched through the retrieved contexts and found that 'Ex Machina' explicitly deals with artificial intelligence, featuring an AI robot undergoing the Turing test. Other contexts like '2001: A Space Odyssey' with HAL 9000 and 'Blade Runner' with replicants also involve AI themes."
-}
+# Or on Windows
+rmdir /s vector_store
 ```
 
-## 📝 Notes
+Then run with `load_from_cache=0`.
 
-- **Dataset**: 34,886 movies from Wikipedia (using 500 sample by default)
-- **Embedding Dimension**: 768 (all-mpnet-base-v2) or 384 (all-MiniLM-L6-v2)
-- **Average Response Time**: 2-5 seconds per query
-- **Token Usage**: ~500-1000 tokens per query (varies by LLM)
 
+## 📄 License
+
+This project is for educational purposes. The Wikipedia Movie Plots dataset is available under Kaggle's terms of use.
 
 ## 🙏 Acknowledgments
 
 - Dataset: [Wikipedia Movie Plots](https://www.kaggle.com/datasets/jrobischon/wikipedia-movie-plots) by jrobischon
-- Embeddings: Sentence Transformers by UKPLab
+- Embeddings: OpenAI text-embedding-ada-002
 - Vector Store: FAISS by Meta AI Research
 - LLMs: Anthropic (Claude), OpenAI (GPT), Google (Gemini)
 
 ---
 
-**Built with ❤️ using LangChain, FAISS, and Sentence Transformers**
+**Built with ❤️ using LangChain, OpenAI, and FAISS**

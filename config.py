@@ -19,6 +19,7 @@ CHUNK_OVERLAP = 200
 # Embedding parameters
 EMBEDDING_MODEL = 'sentence-transformers/all-mpnet-base-v2'
 DEVICE = 'cpu'
+VECTOR_STORE_PATH ='vector_store/' 
 
 # LLM parameters
 GEMINI_MODEL_NAME = 'models/gemini-2.0-flash-exp'
@@ -32,3 +33,5 @@ DEFAULT_LLM_COMP = 'claude'  # 'gemini', 'openai', or 'claude'
 # Retrieval parameters
 TOP_K = 8
 MAX_TOKENS = 1024
+
+
