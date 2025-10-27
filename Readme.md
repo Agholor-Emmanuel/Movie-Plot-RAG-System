@@ -164,7 +164,7 @@ result = rag_query(query, vector_store, provider="gemini")
 
 **Or change default in `config.py`:**
 ```python
-DEFAULT_LLM_COMP = 'gemini'  # Change to 'openai' or 'claude'
+DEFAULT_LLM_COMP = 'openai'  # Change to 'openai' or 'claude'
 ```
 
 ### First-Time Setup (Download Dataset)
@@ -224,7 +224,7 @@ chunks = preprocess_pipeline(df)
 ### 3. Embedding & Storage
 ```python
 from modules.embeddings import create_embeddings
-vector_store = create_embeddings(chunks, model="HuggingFace")
+vector_store = create_embeddings(chunks, model="Openai")
 # Uses sentence-transformers to create embeddings
 # Stores in FAISS for efficient similarity search
 ```
