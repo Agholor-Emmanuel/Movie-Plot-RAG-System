@@ -94,9 +94,7 @@ def main(queries: list[str], load_from_cache: int = 1, embedding_model: str = "O
 
 if __name__ == "__main__":
     queries = [
-        "What movies feature artificial intelligence?",
-        "Tell me about a movie with time travel",
-        "Which movie has a detective solving crimes?"
+        "What movies feature artificial intelligence?"
     ]
     
     # Use cache (fast!)
